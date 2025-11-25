@@ -6,7 +6,7 @@ Führe diese Befehle in der Proxmox Shell (SSH) aus:
 
 1. **Script herunterladen:**
    ```bash
-   wget -O birdnet-installer.sh [https://raw.githubusercontent.com/DEIN_USERNAME/DEIN_REPO/main/birdnet-installer.sh](https://raw.githubusercontent.com/DEIN_USERNAME/DEIN_REPO/main/birdnet-installer.sh)
+   wget -O birdnet-installer.sh [https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc/main/birdnet-installer.sh](https://raw.githubusercontent.com/DEIN_USERNAME/DEIN_REPO/main/birdnet-installer.sh)
 ### ✨ Features
 * Erstellt einen unprivilegierten Ubuntu 22.04 LXC Container.
 * Installiert Docker und Docker Compose.
