@@ -1,103 +1,303 @@
-#!/usr/bin/env bash
+# Proxmox BirdNET-Go LXC Helper
 
-# Copyright (c) 2025 HatchetMan111
-# Author: HatchetMan111
-# License: MIT
-# https://github.com/HatchetMan111/proxmox-birdnet-lxc-helper
+<div align="center">
+  
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Proxmox](https://img.shields.io/badge/Proxmox-VE-orange.svg)](https://www.proxmox.com/)
+[![BirdNET-Go](https://img.shields.io/badge/BirdNET-Go-green.svg)](https://github.com/tphakala/birdnet-go)
 
-# Lade die Community Scripts Build-Funktionen
-source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+Automatisierte Installation von BirdNET-Go in einem Proxmox LXC Container
 
-function header_info {
-clear
-cat <<"EOF"
-    ____  _          ______   ____________     ______      
-   / __ )(_)_________/ / | / / ____/_  __/    / ____/___   
-  / __  / / ___/ __  /  |/ / __/   / /______/ / __/ __ \  
- / /_/ / / /  / /_/ / /|  / /___  / /_/_____/ /_/ / /_/ /  
-/_____/_/_/   \__,_/_/ |_/_____/ /_/        \____/\____/   
-                                                            
-EOF
-}
+</div>
 
-header_info
-echo -e "Loading..."
+## 📋 Über BirdNET-Go
 
-APP="BirdNET-Go"
-var_disk="4"
-var_cpu="2"
-var_ram="1024"
-var_os="debian"
-var_version="12"
+BirdNET-Go ist eine Go-Implementierung des BirdNET-Modells zur Echtzeit-Vogelerkennung durch Audio-Analyse. Perfekt für Naturbeobachter und Vogelliebhaber!
 
-variables
-color
-catch_errors
+### Features
+- 🎵 Echtzeit-Audioanalyse zur Vogelerkennung
+- 🌐 Webbasiertes Interface
+- 📊 Detaillierte Statistiken und Aufzeichnungen
+- 🔊 Unterstützung verschiedener Audio-Quellen
+- 🗺️ GPS-basierte Artenfilterung
+- 📱 Responsive Web-UI
 
-function default_settings() {
-  CT_TYPE="1"
-  PW=""
-  CT_ID=$NEXTID
-  HN=$NSAPP
-  DISK_SIZE="$var_disk"
-  CORE_COUNT="$var_cpu"
-  RAM_SIZE="$var_ram"
-  BRG="vmbr0"
-  NET="dhcp"
-  GATE=""
-  APT_CACHER=""
-  APT_CACHER_IP=""
-  DISABLEIP6="no"
-  MTU=""
-  SD=""
-  NS=""
-  MAC=""
-  VLAN=""
-  SSH="no"
-  VERB="no"
-  echo_default
-}
+## 🚀 Schnellstart
 
-function update_script() {
-header_info
-if [[ ! -d /opt/birdnet-go ]]; then 
-  msg_error "Keine ${APP} Installation gefunden!"
-  echo "Bitte führe dieses Update im Container aus oder verwende:"
-  echo "bash <(curl -s https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc-helper/main/update.sh)"
-  exit 1
-fi
+### Voraussetzungen
+- Proxmox VE 7.0 oder höher
+- Root-Zugriff auf den Proxmox Host
+- Internetverbindung
+- USB-Audiogerät (Mikrofon) für die Vogelerkennung (optional bei Installation)
 
-msg_info "Updating ${APP}"
-cd /opt/birdnet-go
+### Installation mit einem Befehl
+
+Führe diesen Befehl auf deinem **Proxmox Host** (nicht im Container) aus:
+
+```bash
+bash -c "$(wget -qLO - https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc-helper/main/build.sh)"
+```
+
+Das Script wird:
+1. Einen neuen unprivilegierten LXC Container erstellen
+2. Debian 12 als Basis-OS installieren
+3. Alle notwendigen Abhängigkeiten installieren
+4. BirdNET-Go automatisch einrichten
+5. Einen systemd Service konfigurieren
+
+### Standard Container-Spezifikationen
+
+| Parameter | Wert |
+|-----------|------|
+| **Container Typ** | Unprivileged (sicherer) |
+| **OS** | Debian 12 |
+| **Disk** | 4 GB |
+| **CPU Cores** | 2 |
+| **RAM** | 1024 MB |
+| **Netzwerk** | DHCP (vmbr0) |
+
+## 🎯 Nach der Installation
+
+### 1. Zugriff auf das Web-Interface
+
+Nach erfolgreicher Installation ist BirdNET-Go unter folgender Adresse erreichbar:
+
+```
+http://[CONTAINER-IP]:8080
+```
+
+Die IP-Adresse wird am Ende der Installation angezeigt.
+
+### 2. USB-Audiogerät einbinden (wichtig!)
+
+Damit BirdNET-Go dein Mikrofon nutzen kann, musst du das USB-Audiogerät an den Container durchreichen:
+
+#### Schritt 1: USB-Gerät identifizieren
+Auf dem **Proxmox Host**:
+```bash
+lsusb
+```
+
+Beispiel-Output:
+```
+Bus 001 Device 005: ID 0d8c:0014 C-Media Electronics, Inc. Audio Adapter
+```
+
+#### Schritt 2: Container-ID ermitteln
+```bash
+pct list
+```
+
+#### Schritt 3: USB-Gerät durchreichen
+Ersetze `[CT_ID]` mit deiner Container-ID und `[BUS]:[DEVICE]` mit den Werten aus `lsusb`:
+
+```bash
+pct set [CT_ID] -usb0 host=0d8c:0014
+```
+
+Beispiel:
+```bash
+pct set 905 -usb0 host=0d8c:0014
+```
+
+#### Schritt 4: Container neustarten
+```bash
+pct reboot [CT_ID]
+```
+
+### 3. Audio-Gerät im Container konfigurieren
+
+#### In den Container einloggen:
+```bash
+pct enter [CT_ID]
+```
+
+#### Verfügbare Audio-Geräte auflisten:
+```bash
+arecord -L
+```
+
+#### Audio-Aufnahme testen:
+```bash
+arecord -D sysdefault -d 5 -f cd test.wav
+aplay test.wav
+```
+
+### 4. BirdNET-Go konfigurieren
+
+#### Konfigurationsdatei bearbeiten:
+```bash
+nano /opt/birdnet-go/config.yaml
+```
+
+#### Wichtige Einstellungen:
+
+```yaml
+# GPS-Koordinaten für regionale Artenfilterung
+birdnet:
+  latitude: 48.8    # Deine Latitude
+  longitude: 9.8    # Deine Longitude
+  locale: de        # Sprache (de, en, etc.)
+  
+# Audio-Quelle
+audio:
+  source: sysdefault  # Ändern falls nötig (siehe arecord -L)
+```
+
+#### Service nach Änderungen neustarten:
+```bash
+systemctl restart birdnet-go
+```
+
+## 🔧 Verwaltung
+
+### Wichtige Befehle
+
+```bash
+# Service Status prüfen
+systemctl status birdnet-go
+
+# Service neustarten
+systemctl restart birdnet-go
+
+# Service stoppen
 systemctl stop birdnet-go
 
-RELEASE=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4)}')
-
-if [[ -f "birdnet-go" ]]; then
-  CURRENT_VERSION=$(./birdnet-go --version 2>&1 | grep -oP 'version \K[0-9.]+' || echo "unknown")
-  msg_info "Aktuelle Version: ${CURRENT_VERSION}"
-  msg_info "Neueste Version: ${RELEASE}"
-fi
-
-# Backup der Config
-if [[ -f "config.yaml" ]]; then
-  cp config.yaml config.yaml.backup
-fi
-
-wget -q "https://github.com/tphakala/birdnet-go/releases/download/v${RELEASE}/birdnet-go_Linux_x86_64.tar.gz"
-tar -xzf "birdnet-go_Linux_x86_64.tar.gz"
-rm "birdnet-go_Linux_x86_64.tar.gz"
-chmod +x birdnet-go
-
+# Service starten
 systemctl start birdnet-go
-msg_ok "Updated ${APP} to ${RELEASE}"
-exit
+
+# Logs in Echtzeit anzeigen
+journalctl -u birdnet-go -f
+
+# Konfiguration bearbeiten
+nano /opt/birdnet-go/config.yaml
+```
+
+### Update auf neueste Version
+
+#### Automatisches Update (empfohlen)
+Im Container ausführen:
+```bash
+bash <(curl -s https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc-helper/main/update.sh)
+```
+
+#### Manuelles Update
+```bash
+cd /opt/birdnet-go
+systemctl stop birdnet-go
+# Backup der Config
+cp config.yaml config.yaml.backup
+# Neueste Version laden
+RELEASE=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4)}')
+wget -q "https://github.com/tphakala/birdnet-go/releases/download/v${RELEASE}/birdnet-go_Linux_x86_64.tar.gz"
+tar -xzf birdnet-go_Linux_x86_64.tar.gz
+rm birdnet-go_Linux_x86_64.tar.gz
+chmod +x birdnet-go
+systemctl start birdnet-go
+```
+
+## 📁 Datei-Struktur
+
+```
+/opt/birdnet-go/
+├── birdnet-go          # Hauptprogramm
+├── config.yaml         # Konfigurationsdatei
+├── clips/              # Audio-Aufnahmen (falls aktiviert)
+└── logs/               # Log-Dateien
+```
+
+## 🐛 Troubleshooting
+
+### Container startet nicht
+```bash
+# Logs prüfen
+pct status [CT_ID]
+pct start [CT_ID] --debug
+```
+
+### BirdNET-Go erkennt kein Audio-Gerät
+```bash
+# Im Container
+arecord -L                    # Verfügbare Geräte anzeigen
+arecord -D sysdefault -d 5 test.wav  # Test-Aufnahme
+```
+
+### Web-Interface nicht erreichbar
+```bash
+# Service Status prüfen
+systemctl status birdnet-go
+
+# Firewall prüfen (auf Proxmox Host)
+iptables -L -n | grep 8080
+
+# Port prüfen
+ss -tlnp | grep 8080
+```
+
+### USB-Gerät wird nicht erkannt
+```bash
+# Auf Proxmox Host
+lsusb                         # USB-Geräte anzeigen
+pct config [CT_ID]           # USB-Mapping prüfen
+
+# Im Container
+ls -la /dev/snd/             # Audio-Geräte prüfen
+```
+
+## 🔐 Sicherheit
+
+- Der Container läuft **unprivileged** für erhöhte Sicherheit
+- Standard-Port 8080 (kann in `config.yaml` geändert werden)
+- Keine Ports nach außen exposed (nur im lokalen Netzwerk)
+- Regelmäßige Updates empfohlen
+
+### Reverse Proxy empfohlen
+
+Für externen Zugriff solltest du einen Reverse Proxy (z.B. Nginx Proxy Manager) verwenden:
+```nginx
+location / {
+    proxy_pass http://[CONTAINER-IP]:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
 }
+```
 
-start
-build_container
-description
+## 🤝 Beitragen
 
-msg_ok "Completed Successfully!\n"
-echo -e "${APP} sollte unter folgender Adresse erreichbar sein:
-         ${BL}http://${IP}:8080${CL} \n"
+Verbesserungsvorschläge und Pull Requests sind willkommen!
+
+1. Fork das Repository
+2. Erstelle einen Feature-Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit deine Änderungen (`git commit -m 'Add some AmazingFeature'`)
+4. Push zum Branch (`git push origin feature/AmazingFeature`)
+5. Öffne einen Pull Request
+
+## 📝 Lizenz
+
+Dieses Projekt ist unter der MIT-Lizenz lizenziert - siehe [LICENSE](LICENSE) für Details.
+
+## 🙏 Credits
+
+- **BirdNET-Go**: [tphakala/birdnet-go](https://github.com/tphakala/birdnet-go)
+- **Proxmox Helper Scripts**: [community-scripts/ProxmoxVE](https://github.com/community-scripts/ProxmoxVE)
+- **BirdNET**: [Original BirdNET Project](https://birdnet.cornell.edu/)
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/HatchetMan111/proxmox-birdnet-lxc-helper/issues)
+- **BirdNET-Go Dokumentation**: [BirdNET-Go Docs](https://github.com/tphakala/birdnet-go/wiki)
+- **Proxmox Forum**: [Proxmox Community Forum](https://forum.proxmox.com/)
+
+## ⭐ Stern geben
+
+Wenn dir dieses Projekt gefällt, gib ihm einen Stern auf GitHub!
+
+---
+
+<div align="center">
+  
+**Viel Spaß beim Vögel beobachten! 🐦**
+
+Made with ❤️ for the bird watching community
+
+</div>
