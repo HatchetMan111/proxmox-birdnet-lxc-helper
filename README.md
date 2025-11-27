@@ -25,7 +25,7 @@ Führe die folgenden Befehle in deiner **Proxmox Host-Konsole (Shell)** aus:
 ### Option 1: Schnellstart (Einzeiler)
 
 ```bash
-wget -O birdnet-installer.sh [https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc/main/birdnet-installer.sh](https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc/main/birdnet-installer.sh) && chmod +x birdnet-installer.sh && ./birdnet-installer.sh
+wget -O birdnet_installer.sh https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc-helper/main/birdnet_installer.sh && chmod +x birdnet_installer.sh && ./birdnet_installer.sh
 ```
 
 ### ⚠️ Voraussetzungen
