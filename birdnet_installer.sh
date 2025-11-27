@@ -1,119 +1,129 @@
 #!/bin/bash
-# BirdNET Installer Helper Script for Proxmox (LXC) - RTSP Focus
-# Erstellt von [Dein Name oder Handle]
-# Installiert BirdNET-Go als Docker-Container
 
-# --- Variablen ---
-LXC_ID="905"
-LXC_NAME="birdnet"
-LXC_PASSWORD="HA_Password" # SICHERES PASSWORT VERWENDEN
-LXC_MEMORY="1536" # 1.5GB RAM (etwas mehr für Docker/FFmpeg-Pufferung)
-LXC_SWAP="512"
-LXC_DISK="10" # 10GB Disk (Mehr Platz für Aufzeichnungen)
-LXC_CORES="2"
-LXC_BRIDGE="vmbr0"
-LXC_IP="dhcp" 
-LXC_GW="" 
+# ----------------------------------------------------------------------------------
+# Script: birdnet-installer.sh
+# Repository: https://github.com/HatchetMan111/proxmox-birdnet-lxc
+# Description: Installs BirdNET-Go in a Proxmox LXC Container (Docker-based)
+#              Optimized for RTSP Streams (No USB Passthrough needed)
+# ----------------------------------------------------------------------------------
 
-# Ubuntu 22.04 LTS Cloud-Init Template (Jammy Jellyfish)
-TEMPLATE_URL="https://cloud-images.ubuntu.com/jammy/current/jammy-server-cloudimg-amd64.tar.gz"
-TEMPLATE_FILENAME="jammy-server-cloudimg-amd64.tar.gz"
-TEMPLATE_STORAGE="local"
-LXC_STORAGE="local-lvm" 
+set -e
 
-# --- Funktionen ---
+# --- Configuration ---
+CT_ID="905"                   # Container ID (Change if needed)
+CT_NAME="birdnet-go"          # Container Hostname
+CT_PASSWORD="ChangeMe123!"    # Root Password for the Container
+DISK_SIZE="10G"               # Disk Size
+RAM_SIZE="2048"               # RAM in MB (2GB recommended for AI analysis)
+CORES="2"                     # CPU Cores
+OS_TEMPLATE="local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst" # Standard Proxmox Template Path
+STORAGE="local-lvm"           # Proxmox Storage for the Container Disk
 
-# Funktion für Statusmeldungen
-log() {
-    echo -e "\n\e[1m\e[34m---> $1\e[0m\n"
-}
+# --- Colors for Output ---
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
 
-# Funktion für Fehlermeldungen
-error() {
-    echo -e "\n\e[1m\e[31m!!! FEHLER: $1 !!!\e[0m\n"
-    exit 1
-}
+# --- Helper Functions ---
+function msg_info() { echo -e "${BLUE}[INFO] ${1}${NC}"; }
+function msg_ok() { echo -e "${GREEN}[OK] ${1}${NC}"; }
+function msg_err() { echo -e "${RED}[ERROR] ${1}${NC}"; }
 
-# Funktion für die Installation
-install_birdnet() {
-    log "Überprüfe Proxmox Umgebung und Cloud-Init Template"
-    
-    if [ ! -f "/var/lib/vz/template/cache/${TEMPLATE_FILENAME}" ]; then
-        log "Lade Ubuntu 22.04 Cloud-Init Template herunter..."
-        wget -q -O /var/lib/vz/template/cache/${TEMPLATE_FILENAME} ${TEMPLATE_URL} || error "Template Download fehlgeschlagen"
-    else
-        log "Template bereits vorhanden."
-    fi
+# --- Main Script ---
 
-    log "Erstelle LXC Container (ID: $LXC_ID) für BirdNET..."
-    
-    pvesh create /nodes/$(hostname)/lxc --vmid ${LXC_ID} \
-        --hostname ${LXC_NAME} \
-        --ostemplate ${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE_FILENAME} \
-        --net0 name=eth0,bridge=${LXC_BRIDGE},ip=${LXC_IP},gw=${LXC_GW},type=veth \
-        --memory ${LXC_MEMORY} --swap ${LXC_SWAP} --cores ${LXC_CORES} \
-        --rootfs ${LXC_STORAGE}:${LXC_DISK} \
-        --unprivileged 1 \
-        --password ${LXC_PASSWORD} \
-        --storage ${LXC_STORAGE} \
-        --description "BirdNET-Go mit Docker für RTSP" \
-        || error "LXC Container Erstellung fehlgeschlagen"
-
-    log "Starte BirdNET LXC Container und warte auf Netzwerk-Initialisierung..."
-    
-    pct start ${LXC_ID} || error "LXC Container Start fehlgeschlagen"
-    sleep 30
-
-    log "Installiere Docker und starte BirdNET-Go Container..."
-
-    # Docker Installations- und Startbefehle (als root im Container)
-    pct exec ${LXC_ID} -- bash -c "
-        apt update && apt upgrade -y
-        apt install -y curl git
-        
-        # Installiere Docker
-        curl -fsSL https://get.docker.com -o get-docker.sh
-        sh get-docker.sh
-        usermod -aG docker root
-        
-        # Erstelle Verzeichnisse für persistente Daten
-        mkdir -p /home/birdnet/config /home/birdnet/data
-        
-        # Starte den BirdNET-Go Container
-        # Port 8080 ist der Standardport für BirdNET-Go Web-UI
-        docker run -d \
-            --name birdnet-go \
-            --restart unless-stopped \
-            -p 8080:8080 \
-            -v /home/birdnet/config:/config \
-            -v /home/birdnet/data:/data \
-            ghcr.io/tphakala/birdnet-go:latest \
-            || error 'BirdNET Docker Container Start fehlgeschlagen'
-        
-        log 'BirdNET Docker Container gestartet! Web-UI auf Port 8080.'
-    " || error "Installation im Container fehlgeschlagen"
-
-    log "--- Installation abgeschlossen ---"
-    
-    LXC_IP_ADDR=$(pct exec ${LXC_ID} ip a show eth0 | grep -oP 'inet \K[\d.]+')
-    
-    log "BirdNET-Go ist nun im LXC Container ID ${LXC_ID} installiert."
-    
-    log "Zugriff auf das BirdNET Web-Interface über: http://${LXC_IP_ADDR}:8080"
-    
-    log "!!! Wichtige Nächste Schritte: RTSP-Stream Konfiguration !!!"
-    log "1. Öffne das BirdNET Web-Interface unter der oben genannten Adresse."
-    log "2. Navigiere zu **Settings** (Einstellungen) -> **Audio Capture**."
-    log "3. Gib dort die vollständige **RTSP Stream URL** deiner Überwachungskamera ein (z.B. rtsp://user:password@192.168.1.100:554/live)."
-    log "4. Speichere die Einstellungen und starte den BirdNET Service über das UI neu."
-    
-    log "Viel Erfolg beim Vogelbeobachten!"
-}
-
-# --- Skript Start ---
-
-if [ "$EUID" -ne 0 ]; then
-    error "Dieses Skript muss als root oder mit 'sudo' ausgeführt werden."
+# 1. Check Root
+if [ "$EUID" -ne 0 ]; then 
+  msg_err "Please run as root."
+  exit 1
 fi
 
-install_birdnet
+msg_info "Starting BirdNET-Go Installation on Proxmox..."
+
+# 2. Check if ID is free
+if pct status $CT_ID &>/dev/null; then
+    msg_err "ID $CT_ID is already in use. Please change CT_ID in the script or remove the old container."
+    exit 1
+fi
+
+# 3. Download Template (if using standard pveam templates)
+msg_info "Checking for Ubuntu 22.04 Template..."
+pveam update >/dev/null
+# Note: Usually Proxmox has this template available via 'pveam'. 
+# If not present, you might need to download it manually or use 'pveam download local ubuntu-22.04-standard_22.04-1_amd64.tar.zst'
+# Assuming standard setup:
+if ! pveam available | grep -q "ubuntu-22.04"; then
+    msg_info "Downloading Ubuntu 22.04 Template..."
+    pveam download local ubuntu-22.04-standard_22.04-1_amd64.tar.zst >/dev/null || true
+fi
+
+# 4. Create LXC Container
+msg_info "Creating LXC Container (ID: $CT_ID)..."
+pct create $CT_ID $OS_TEMPLATE \
+    --hostname $CT_NAME \
+    --cores $CORES \
+    --memory $RAM_SIZE \
+    --swap 512 \
+    --storage $STORAGE \
+    --rootfs $DISK_SIZE \
+    --net0 name=eth0,bridge=vmbr0,ip=dhcp,type=veth \
+    --features nesting=1,keyctl=1 \
+    --unprivileged 1 \
+    --password $CT_PASSWORD \
+    --start 1 \
+    --onboot 1
+
+msg_ok "Container created and started."
+
+# 5. Wait for Network
+msg_info "Waiting for container network..."
+sleep 10
+
+# 6. Install Docker & BirdNET inside Container
+msg_info "Installing Docker and BirdNET-Go inside the container..."
+
+pct exec $CT_ID -- bash -c "
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update
+    apt-get upgrade -y
+    apt-get install -y curl git tzdata
+
+    # Install Docker
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sh get-docker.sh
+    rm get-docker.sh
+
+    # Setup directories
+    mkdir -p /var/lib/birdnet-go/config
+    mkdir -p /var/lib/birdnet-go/data
+
+    # Run BirdNET-Go Docker Container
+    # -p 8080:8080 : Maps the WebUI
+    # Uses ghcr.io/tphakala/birdnet-go (Great for RTSP)
+    echo 'Starting BirdNET-Go Docker container...'
+    docker run -d \\
+      --name birdnet-go \\
+      --restart unless-stopped \\
+      -p 8080:8080 \\
+      -v /var/lib/birdnet-go/config:/config \\
+      -v /var/lib/birdnet-go/data:/data \\
+      -e TZ=Europe/Berlin \\
+      ghcr.io/tphakala/birdnet-go:latest
+"
+
+# 7. Get IP Address
+IP=$(pct exec $CT_ID ip a s dev eth0 | awk '/inet / {print $2}' | cut -d/ -f1)
+
+# 8. Finished
+echo -e "\n${GREEN}--------------------------------------------------${NC}"
+echo -e "${GREEN} Installation Finished Successfully! ${NC}"
+echo -e "${GREEN}--------------------------------------------------${NC}"
+echo -e "BirdNET-Go is running."
+echo -e "Web Interface: ${BLUE}http://${IP}:8080${NC}"
+echo -e ""
+echo -e "NEXT STEPS:"
+echo -e "1. Open the Web Interface."
+echo -e "2. Go to 'Settings' -> 'Audio'."
+echo -e "3. Enter your Camera RTSP URL (e.g., rtsp://user:pass@IP:554/stream)."
+echo -e "4. Configure MQTT for Home Assistant integration."
+echo -e "--------------------------------------------------"
