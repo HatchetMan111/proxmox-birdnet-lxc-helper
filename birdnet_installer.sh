@@ -1,122 +1,128 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# ----------------------------------------------------------------------------------
-# Script: birdnet_installer.sh
-# Repository: https://github.com/HatchetMan111/proxmox-birdnet-lxc-helper
-# Description: Installs BirdNET-Go in a Proxmox LXC Container (Docker-based).
-#              Optimiert für RTSP Streams (IP-Kameras, kein USB Passthrough nötig).
-# ----------------------------------------------------------------------------------
+# Copyright (c) 2025 HatchetMan111
+# Author: HatchetMan111
+# License: MIT
+# https://github.com/HatchetMan111/proxmox-birdnet-lxc-helper
 
-set -euo pipefail
+source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+color
+verb_ip6
+catch_errors
+setting_up_container
+network_check
+update_os
 
-# --- Configuration Variables ---
-CT_ID="905"                   # Container ID (Standard für Helper)
-CT_NAME="birdnet-go"          # Container Hostname
-CT_PASSWORD="ChangeMe123!"    # Root Password for the Container (WICHTIG: Auf sicheres PW ändern!)
-DISK_SIZE="10"                # NEU: Größe nur als Zahl, ohne Einheit (Proxmox hängt 'G' automatisch an)
-RAM_SIZE="2048"               # RAM in MB (2GB empfohlen)
-CORES="2"                     # CPU Cores
-OS_TEMPLATE="local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst" # Ubuntu 22.04
-ROOTFS_STORAGE="local-lvm"    # WICHTIG: Hier muss DEIN Speichernamen stehen (z.B. local-lvm oder local)
+msg_info "Installing Dependencies"
+$STD apt-get install -y curl
+$STD apt-get install -y sudo
+$STD apt-get install -y mc
+$STD apt-get install -y git
+$STD apt-get install -y alsa-utils
+$STD apt-get install -y ffmpeg
+msg_ok "Installed Dependencies"
 
-# --- Colors for Output ---
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-YELLOW='\033[0;33m'
-NC='\033[0m' # No Color
+msg_info "Installing BirdNET-Go"
+RELEASE=$(curl -s https://api.github.com/repos/tphakala/birdnet-go/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3)}')
+cd /opt
+$STD git clone https://github.com/tphakala/birdnet-go.git
+cd birdnet-go
+$STD wget -q "https://github.com/tphakala/birdnet-go/releases/download/${RELEASE}/birdnet-go_Linux_x86_64.tar.gz"
+$STD tar -xzf "birdnet-go_Linux_x86_64.tar.gz"
+$STD rm "birdnet-go_Linux_x86_64.tar.gz"
+$STD chmod +x birdnet-go
+msg_ok "Installed BirdNET-Go"
 
-# --- Helper Functions ---
-function msg_info() { echo -e "${BLUE}[INFO] ${1}${NC}"; }
-function msg_ok() { echo -e "${GREEN}[OK] ${1}${NC}"; }
-function msg_err() { echo -e "${RED}[ERROR] ${1}${NC}"; exit 1; }
+msg_info "Creating Service"
+cat <<EOF >/etc/systemd/system/birdnet-go.service
+[Unit]
+Description=BirdNET-Go Service
+After=network.target
 
-# --- Main Script ---
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/birdnet-go
+ExecStart=/opt/birdnet-go/birdnet-go --config /opt/birdnet-go/config.yaml
+Restart=on-failure
+RestartSec=5s
 
-# 1. Check Root
-if [ "$EUID" -ne 0 ]; then 
-  msg_err "Dieses Skript muss als root oder mit 'sudo' ausgeführt werden."
-fi
+[Install]
+WantedBy=multi-user.target
+EOF
 
-msg_info "Starte BirdNET-Go Installation auf Proxmox VE (LXC)..."
+systemctl daemon-reload
+systemctl enable -q --now birdnet-go.service
+msg_ok "Created Service"
 
-# 2. Check if ID is free
-if pct status $CT_ID &>/dev/null; then
-    msg_err "Container ID $CT_ID ist bereits belegt. Bitte ändern Sie die Variable CT_ID im Skript."
-fi
+msg_info "Creating Initial Configuration"
+cat <<EOF >/opt/birdnet-go/config.yaml
+# BirdNET-Go Configuration
+# Bearbeite diese Datei nach deinen Bedürfnissen
 
-# 3. Check for Template
-msg_info "Überprüfe Ubuntu 22.04 Template..."
-if ! pveam available | grep -q "ubuntu-22.04"; then
-    msg_info "Template nicht lokal gefunden. Lade 'ubuntu-22.04-standard' herunter (Kann einige Minuten dauern)..."
-    pveam download local ubuntu-22.04-standard_22.04-1_amd64.tar.zst || msg_err "Template Download fehlgeschlagen."
-fi
+main:
+  name: BirdNET-Go
+  timeas24h: true
+  log:
+    enabled: true
+    level: info
+    rotation: daily
+    maxsize: 10
 
-# 4. Create LXC Container
-msg_info "Erstelle unprivilegierten LXC Container (ID: $CT_ID)..."
+webserver:
+  enabled: true
+  port: 8080
+  host: 0.0.0.0
+  autotls: false
 
-# WICHTIG: Hier wird RootFS als Größe und Speicherort festgelegt.
-pct create $CT_ID $OS_TEMPLATE \
-    --hostname $CT_NAME \
-    --cores $CORES \
-    --memory $RAM_SIZE \
-    --swap 512 \
-    --rootfs ${ROOTFS_STORAGE}:${DISK_SIZE}G \
-    --net0 name=eth0,bridge=vmbr0,ip=dhcp,type=veth \
-    --features nesting=1,keyctl=1 \
-    --unprivileged 1 \
-    --password $CT_PASSWORD \
-    --start 1 \
-    --onboot 1 \
-    --description "BirdNET-Go LXC Helper Script (RTSP)"
+birdnet:
+  sensitivity: 1.0
+  threshold: 0.7
+  overlap: 0.0
+  latitude: 48.8
+  longitude: 9.8
+  threads: 0
+  locale: de
 
-msg_ok "Container erstellt und gestartet."
+realtime:
+  enabled: true
+  interval: 15
+  processingtime: false
 
-# 5. Wait for Network
-msg_info "Warte auf Container Boot und Netzwerkkonfiguration (15s)..."
-sleep 15
+audio:
+  source: sysdefault
+  export:
+    enabled: false
+    path: /opt/birdnet-go/clips
+    type: wav
+EOF
+msg_ok "Created Initial Configuration"
 
-# 6. Install Docker & BirdNET inside Container
-msg_info "Installiere Docker und starte BirdNET-Go Container..."
+motd_ssh
+customize
 
-pct exec $CT_ID -- bash -c "
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update
-    apt-get install -y curl git tzdata 
+msg_info "Cleaning up"
+$STD apt-get autoremove
+$STD apt-get autoclean
+msg_ok "Cleaned"
 
-    # Install Docker
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
-    rm get-docker.sh
-
-    # Setup persistent directories
-    mkdir -p /var/lib/birdnet-go/config
-    mkdir -p /var/lib/birdnet-go/data
-    
-    # Run BirdNET-Go Docker Container
-    echo 'Starte BirdNET-Go Docker Container...'
-    docker run -d \
-      --name birdnet-go \
-      --restart unless-stopped \
-      -p 8080:8080 \
-      -v /var/lib/birdnet-go/config:/config \
-      -v /var/lib/birdnet-go/data:/data \
-      -e TZ=Europe/Berlin \
-      ghcr.io/tphakala/birdnet-go:latest
-" || msg_err "Installation im Container fehlgeschlagen. Prüfen Sie die Logs des Containers."
-
-# 7. Get IP Address
-IP=$(pct exec $CT_ID ip a s dev eth0 | awk '/inet / {print $2}' | cut -d/ -f1)
-
-# 8. Finished
-echo -e "\n${GREEN}------------------------------------------------------------${NC}"
-echo -e "${GREEN} Installation erfolgreich abgeschlossen! ${NC}"
-echo -e "${GREEN}------------------------------------------------------------${NC}"
-echo -e "BirdNET-Go ist im Container ID ${CT_ID} gestartet."
-echo -e "Web Interface: ${BLUE}http://${IP}:8080${NC}"
-echo -e ""
-echo -e "${YELLOW}Wichtige Nächste Schritte (RTSP/Home Assistant):${NC}"
-echo -e "1. Öffnen Sie die Web-Oberfläche (${IP}:8080)."
-echo -e "2. Navigieren Sie zu 'Settings' -> 'Audio' und geben Sie die vollständige **RTSP Stream URL** Ihrer Kamera ein."
-echo -e "3. Konfigurieren Sie unter 'Settings' -> 'MQTT' die Verbindung zu Home Assistant."
-echo -e "------------------------------------------------------------"
+msg_info "BirdNET-Go Installation erfolgreich!"
+echo ""
+echo "==================================================================="
+echo "BirdNET-Go wurde erfolgreich installiert!"
+echo "==================================================================="
+echo ""
+echo "Web-Interface erreichbar unter: http://$(hostname -I | awk '{print $1}'):8080"
+echo ""
+echo "Wichtige Befehle:"
+echo "  - Konfiguration bearbeiten: nano /opt/birdnet-go/config.yaml"
+echo "  - Service neustarten:       systemctl restart birdnet-go"
+echo "  - Service Status:           systemctl status birdnet-go"
+echo "  - Logs anzeigen:            journalctl -u birdnet-go -f"
+echo ""
+echo "Audio-Geräte testen:"
+echo "  - Geräte auflisten:         arecord -L"
+echo "  - Aufnahme testen:          arecord -D sysdefault -d 5 test.wav"
+echo ""
+echo "==================================================================="
+echo ""
