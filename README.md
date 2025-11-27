@@ -4,15 +4,28 @@ Dieses Bash-Helper-Script automatisiert die Einrichtung von **BirdNET-Go** in ei
 
 Führe diese Befehle in der Proxmox Shell (SSH) aus:
 
-1. **Script herunterladen:**
-   ```bash
-   wget -O birdnet-installer.sh [https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc/main/birdnet-installer.sh]
-### ✨ Features
-(https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc/main/birdnet-installer.sh)
-* Erstellt einen unprivilegierten Ubuntu 22.04 LXC Container.
-* Installiert Docker und Docker Compose.
-* Startet den **BirdNET-Go** Container (`ghcr.io/tphakala/birdnet-go`) automatisch.
-* Optimiert für Audio-Input via RTSP-Stream.
+# 🐦 BirdNET-Go Proxmox LXC Installer (RTSP Optimized)
+
+Ein einfaches Helper-Script, um **BirdNET-Go** in einem **Proxmox LXC Container** zu installieren.
+
+Dieses Script ist **speziell für die Nutzung von IP-Kameras (RTSP-Streams)** optimiert. Es benötigt **kein** USB-Mikrofon und kein kompliziertes USB-Passthrough. Es nutzt Docker innerhalb eines unprivilegierten LXC-Containers für maximale Effizienz.
+
+## ✨ Features
+
+* 🐧 **Basis:** Ubuntu 22.04 LTS LXC Container (Unprivileged).
+* 🐳 **Docker:** Automatische Installation von Docker & Docker Compose.
+* 🧠 **AI Engine:** Installiert [BirdNET-Go](https://github.com/tphakala/birdnet-go) (effizienter Go-Port der BirdNET-Pi Software).
+* 📹 **RTSP Ready:** Vorbereitet für die Analyse von Audio aus Kamera-Streams.
+* 🏠 **Home Assistant:** Volle MQTT Unterstützung für Sensoren.
+
+## 🚀 Installation
+
+Führe die folgenden Befehle in deiner **Proxmox Host-Konsole (Shell)** aus:
+
+### Option 1: Schnellstart (Einzeiler)
+
+```bash
+wget -O birdnet-installer.sh [https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc/main/birdnet-installer.sh](https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc/main/birdnet-installer.sh) && chmod +x birdnet-installer.sh && ./birdnet-installer.sh
 
 ### ⚠️ Voraussetzungen
 * Ein installierter Proxmox VE Server.
