@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # ----------------------------------------------------------------------------------
-# Script: birdnet-installer.sh
+# Script: birdnet_installer.sh
 # Repository: https://github.com/HatchetMan111/proxmox-birdnet-lxc-helper
-# Description: Installs BirdNET-Go in a Proxmox LXC Container (Docker-based)
-#              Optimiert für RTSP Streams (IP-Kameras, kein USB Passthrough nötig)
+# Description: Installs BirdNET-Go in a Proxmox LXC Container (Docker-based).
+#              Optimiert für RTSP Streams (IP-Kameras, kein USB Passthrough nötig).
 # ----------------------------------------------------------------------------------
 
 set -euo pipefail
@@ -12,12 +12,12 @@ set -euo pipefail
 # --- Configuration Variables ---
 CT_ID="905"                   # Container ID (Standard für Helper)
 CT_NAME="birdnet-go"          # Container Hostname
-CT_PASSWORD="ChangeMe123!"    # Root Password for the Container (WICHTIG: Ändern!)
+CT_PASSWORD="ChangeMe123!"    # Root Password for the Container (WICHTIG: Auf sicheres PW ändern!)
 DISK_SIZE="10G"               # Disk Size (10GB empfohlen)
 RAM_SIZE="2048"               # RAM in MB (2GB empfohlen)
 CORES="2"                     # CPU Cores
 OS_TEMPLATE="local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst" # Ubuntu 22.04
-STORAGE="local-lvm"           # Proxmox Storage für die Container Disk (Anpassen!)
+STORAGE="local-lvm"           # Proxmox Storage für die Container Disk (WICHTIG: Auf DEINEN Speichernamen anpassen, z.B. local oder local-lvm)
 
 # --- Colors for Output ---
 GREEN='\033[0;32m'
@@ -29,15 +29,13 @@ NC='\033[0m' # No Color
 # --- Helper Functions ---
 function msg_info() { echo -e "${BLUE}[INFO] ${1}${NC}"; }
 function msg_ok() { echo -e "${GREEN}[OK] ${1}${NC}"; }
-function msg_warn() { echo -e "${YELLOW}[WARN] ${1}${NC}"; }
-function msg_err() { echo -e "${RED}[ERROR] ${1}${NC}"; }
+function msg_err() { echo -e "${RED}[ERROR] ${1}${NC}"; exit 1; }
 
 # --- Main Script ---
 
 # 1. Check Root
 if [ "$EUID" -ne 0 ]; then 
   msg_err "Dieses Skript muss als root oder mit 'sudo' ausgeführt werden."
-  exit 1
 fi
 
 msg_info "Starte BirdNET-Go Installation auf Proxmox VE (LXC)..."
@@ -45,13 +43,12 @@ msg_info "Starte BirdNET-Go Installation auf Proxmox VE (LXC)..."
 # 2. Check if ID is free
 if pct status $CT_ID &>/dev/null; then
     msg_err "Container ID $CT_ID ist bereits belegt. Bitte ändern Sie die Variable CT_ID im Skript."
-    exit 1
 fi
 
 # 3. Check for Template
 msg_info "Überprüfe Ubuntu 22.04 Template..."
 if ! pveam available | grep -q "ubuntu-22.04"; then
-    msg_warn "Template nicht lokal gefunden. Lade 'ubuntu-22.04-standard' herunter (Kann einige Minuten dauern)..."
+    msg_info "Template nicht lokal gefunden. Lade 'ubuntu-22.04-standard' herunter (Kann einige Minuten dauern)..."
     pveam download local ubuntu-22.04-standard_22.04-1_amd64.tar.zst || msg_err "Template Download fehlgeschlagen."
 fi
 
@@ -63,7 +60,7 @@ pct create $CT_ID $OS_TEMPLATE \
     --memory $RAM_SIZE \
     --swap 512 \
     --storage $STORAGE \
-    --rootfs $DISK_SIZE \
+    --rootfs ${STORAGE}:${DISK_SIZE} \
     --net0 name=eth0,bridge=vmbr0,ip=dhcp,type=veth \
     --features nesting=1,keyctl=1 \
     --unprivileged 1 \
@@ -96,7 +93,7 @@ pct exec $CT_ID -- bash -c "
     mkdir -p /var/lib/birdnet-go/data
     
     # Run BirdNET-Go Docker Container
-    msg_info 'Starte BirdNET-Go Docker Container...'
+    echo 'Starte BirdNET-Go Docker Container...'
     docker run -d \
       --name birdnet-go \
       --restart unless-stopped \
@@ -105,7 +102,7 @@ pct exec $CT_ID -- bash -c "
       -v /var/lib/birdnet-go/data:/data \
       -e TZ=Europe/Berlin \
       ghcr.io/tphakala/birdnet-go:latest
-"
+" || msg_err "Installation im Container fehlgeschlagen. Prüfen Sie die Logs des Containers."
 
 # 7. Get IP Address
 IP=$(pct exec $CT_ID ip a s dev eth0 | awk '/inet / {print $2}' | cut -d/ -f1)
