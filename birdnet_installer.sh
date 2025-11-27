@@ -17,7 +17,7 @@ DISK_SIZE="10G"               # Disk Size (10GB empfohlen)
 RAM_SIZE="2048"               # RAM in MB (2GB empfohlen)
 CORES="2"                     # CPU Cores
 OS_TEMPLATE="local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst" # Ubuntu 22.04
-STORAGE="local-lvm"           # Proxmox Storage für die Container Disk (WICHTIG: Auf DEINEN Speichernamen anpassen, z.B. local oder local-lvm)
+ROOTFS_STORAGE="local-lvm"    # WICHTIG: Hier muss DEIN Speichernamen stehen (z.B. local-lvm oder local)
 
 # --- Colors for Output ---
 GREEN='\033[0;32m'
@@ -54,13 +54,14 @@ fi
 
 # 4. Create LXC Container
 msg_info "Erstelle unprivilegierten LXC Container (ID: $CT_ID)..."
+
+# --- KORRIGIERTE SYNTAX HIER ---
 pct create $CT_ID $OS_TEMPLATE \
     --hostname $CT_NAME \
     --cores $CORES \
     --memory $RAM_SIZE \
     --swap 512 \
-    --storage $STORAGE \
-    --rootfs ${STORAGE}:${DISK_SIZE} \
+    --rootfs ${ROOTFS_STORAGE}:${DISK_SIZE} \
     --net0 name=eth0,bridge=vmbr0,ip=dhcp,type=veth \
     --features nesting=1,keyctl=1 \
     --unprivileged 1 \
