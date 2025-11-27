@@ -26,6 +26,7 @@ Führe die folgenden Befehle in deiner **Proxmox Host-Konsole (Shell)** aus:
 
 ```bash
 wget -O birdnet-installer.sh [https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc/main/birdnet-installer.sh](https://raw.githubusercontent.com/HatchetMan111/proxmox-birdnet-lxc/main/birdnet-installer.sh) && chmod +x birdnet-installer.sh && ./birdnet-installer.sh
+```
 
 ### ⚠️ Voraussetzungen
 * Ein installierter Proxmox VE Server.
