@@ -13,7 +13,7 @@ set -euo pipefail
 CT_ID="905"                   # Container ID (Standard für Helper)
 CT_NAME="birdnet-go"          # Container Hostname
 CT_PASSWORD="ChangeMe123!"    # Root Password for the Container (WICHTIG: Auf sicheres PW ändern!)
-DISK_SIZE="10G"               # Disk Size (10GB empfohlen)
+DISK_SIZE="10"                # NEU: Größe nur als Zahl, ohne Einheit (Proxmox hängt 'G' automatisch an)
 RAM_SIZE="2048"               # RAM in MB (2GB empfohlen)
 CORES="2"                     # CPU Cores
 OS_TEMPLATE="local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst" # Ubuntu 22.04
@@ -55,13 +55,13 @@ fi
 # 4. Create LXC Container
 msg_info "Erstelle unprivilegierten LXC Container (ID: $CT_ID)..."
 
-# --- KORRIGIERTE SYNTAX HIER ---
+# WICHTIG: Hier wird RootFS als Größe und Speicherort festgelegt.
 pct create $CT_ID $OS_TEMPLATE \
     --hostname $CT_NAME \
     --cores $CORES \
     --memory $RAM_SIZE \
     --swap 512 \
-    --rootfs ${ROOTFS_STORAGE}:${DISK_SIZE} \
+    --rootfs ${ROOTFS_STORAGE}:${DISK_SIZE}G \
     --net0 name=eth0,bridge=vmbr0,ip=dhcp,type=veth \
     --features nesting=1,keyctl=1 \
     --unprivileged 1 \
